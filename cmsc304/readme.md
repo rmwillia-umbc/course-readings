@@ -40,3 +40,22 @@ Prof's workflow for embedding course readings in an iframe when the original sit
 ## Tips
 
 - **Pages can take a minute to deploy.** If the URL 404s right after uploading, wait a minute and try again.
+
+- # Talk Slides & Assets
+
+Slides and supporting assets for my data visualization talk.
+
+
+## Embedding in Slides.com
+
+Assets are embedded via iframe. If you update a file and the iframe still shows the old version, bump the query string to bust the cache:
+
+```
+url/filename.html?v=2
+```
+
+Increment `?v=3`, `?v=4`, etc. with each update.
+
+## Notes
+
+- Assets here are things Slides.com can't run natively (interactive HTML/JS)
