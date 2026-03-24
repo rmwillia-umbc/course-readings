@@ -41,10 +41,6 @@ Prof's workflow for embedding course readings in an iframe when the original sit
 
 - **Pages can take a minute to deploy.** If the URL 404s right after uploading, wait a minute and try again.
 
-- # Talk Slides & Assets
-
-Slides and supporting assets for my data visualization talk.
-
 
 ## Embedding in Slides.com
 
