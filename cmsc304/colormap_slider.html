@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Colormap Slider</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d0d0f;
+    color: #e8e4dc;
+    font-family: 'DM Sans', sans-serif;
+    padding: 16px;
+    user-select: none;
+  }
+
+  .wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .labels {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .labels .bad  { color: #e05a5a; }
+  .labels .good { color: #5ab87a; }
+
+  .slider-container {
+    position: relative;
+    width: 100%;
+    cursor: ew-resize;
+    border-radius: 4px;
+    overflow: hidden;
+    line-height: 0;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+  }
+
+  /* clip overlay (jet) on top */
+  .overlay {
+    position: absolute;
+    top: 0; left: 0;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .overlay canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;  /* will be overridden by JS natural width */
+  }
+
+  /* divider line */
+  .divider {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: #fff;
+    transform: translateX(-50%);
+    pointer-events: none;
+    box-shadow: 0 0 8px rgba(0,0,0,0.8);
+  }
+
+  /* handle */
+  .handle {
+    position: absolute;
+    top: 50%;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #fff;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+  }
+
+  .handle svg {
+    width: 18px;
+    height: 18px;
+    fill: #333;
+  }
+
+  .bar-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px;
+  }
+
+  .bar-row canvas {
+    height: 24px;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="labels">
+    <span class="bad">← Rainbow (Jet)</span>
+    <span class="good">Viridis →</span>
+  </div>
+
+  <div class="slider-container" id="container">
+    <!-- base: viridis -->
+    <canvas id="cv-viridis"></canvas>
+    <!-- overlay: jet, clipped -->
+    <div class="overlay" id="overlay">
+      <canvas id="cv-jet"></canvas>
+    </div>
+    <div class="divider" id="divider"></div>
+    <div class="handle" id="handle">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 5l-5 7 5 7M16 5l5 7-5 7" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- color bars -->
+  <div class="bar-row">
+    <canvas id="bar-jet"     height="24"></canvas>
+    <canvas id="bar-viridis" height="24"></canvas>
+  </div>
+  <div class="bar-row">
+    <canvas id="bar-jet-gray"     height="24"></canvas>
+    <canvas id="bar-viridis-gray" height="24"></canvas>
+  </div>
+
+</div>
+
+<script>
+(function () {
+
+  // ── colormaps ────────────────────────────────────────────────────────────
+  function jet(t) {
+    return [
+      Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 3))),
+      Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 2))),
+      Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 1)))
+    ];
+  }
+
+  const VL = [[.267,.005,.329],[.283,.055,.386],[.278,.104,.431],[.263,.149,.466],[.241,.190,.494],[.215,.228,.513],[.190,.263,.525],[.166,.296,.532],[.143,.328,.536],[.122,.359,.537],[.103,.390,.535],[.087,.420,.530],[.075,.450,.522],[.068,.481,.511],[.072,.511,.496],[.089,.541,.478],[.120,.571,.457],[.164,.600,.433],[.217,.629,.406],[.275,.656,.376],[.337,.682,.344],[.402,.707,.310],[.470,.730,.273],[.541,.752,.235],[.613,.773,.196],[.685,.792,.157],[.758,.811,.118],[.827,.830,.083],[.893,.850,.055],[.949,.873,.052],[.987,.903,.104],[.993,.906,.144]];
+  function viridis(t) {
+    const n = VL.length - 1, i = Math.min(Math.floor(t*n), n-1), f = t*n - i;
+    const a = VL[i], b = VL[Math.min(i+1, n)];
+    return [a[0]+f*(b[0]-a[0]), a[1]+f*(b[1]-a[1]), a[2]+f*(b[2]-a[2])];
+  }
+
+  // ── luminance helpers ────────────────────────────────────────────────────
+  function lin(c)  { return c <= .04045 ? c/12.92 : Math.pow((c+.055)/1.055, 2.4); }
+  function lum(r,g,b) { return .2126*lin(r) + .7152*lin(g) + .0722*lin(b); }
+  function srgb(L) { return L <= .0031308 ? 12.92*L : 1.055*Math.pow(L, 1/2.4) - .055; }
+
+  // ── test signal ──────────────────────────────────────────────────────────
+  function signal(nx, ny) {
+    const g1 = Math.exp(-((nx-.3)**2 + (ny-.4)**2) / .04);
+    const g2 = Math.exp(-((nx-.72)**2 + (ny-.6)**2) / .025);
+    const g3 = Math.exp(-((nx-.55)**2 + (ny-.2)**2) / .015);
+    const wave = .5 + .1 * Math.sin(nx*12) * Math.cos(ny*8);
+    return Math.min(1, Math.max(0, .15*wave + .55*g1 + .7*g2 + .35*g3));
+  }
+
+  // ── render heatmap to canvas ─────────────────────────────────────────────
+  function renderHeatmap(canvas, cmapFn) {
+    const W = canvas.width, H = canvas.height;
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(W, H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const [r,g,b] = cmapFn(signal(x/W, y/H));
+        const i = (y*W + x) * 4;
+        img.data[i]   = r*255|0;
+        img.data[i+1] = g*255|0;
+        img.data[i+2] = b*255|0;
+        img.data[i+3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  // ── render bar ───────────────────────────────────────────────────────────
+  function renderBar(canvas, cmapFn, gray) {
+    const W = canvas.width, H = canvas.height;
+    const ctx = canvas.getContext('2d');
+    for (let x = 0; x < W; x++) {
+      let [r,g,b] = cmapFn(x / (W-1));
+      if (gray) { const s = srgb(lum(r,g,b)); r=g=b=s; }
+      ctx.fillStyle = `rgb(${r*255|0},${g*255|0},${b*255|0})`;
+      ctx.fillRect(x, 0, 1, H);
+    }
+  }
+
+  // ── setup ────────────────────────────────────────────────────────────────
+  const W = 800, H = 320;
+
+  const cvJet     = document.getElementById('cv-jet');
+  const cvViridis = document.getElementById('cv-viridis');
+  cvJet.width     = W; cvJet.height     = H;
+  cvViridis.width = W; cvViridis.height = H;
+
+  renderHeatmap(cvJet,     jet);
+  renderHeatmap(cvViridis, viridis);
+
+  // Fix overlay canvas so it matches natural pixel size
+  cvJet.style.width  = '100%';
+  cvJet.style.height = 'auto';
+
+  // bars
+  const BW = 560;
+  ['bar-jet','bar-jet-gray','bar-viridis','bar-viridis-gray'].forEach(id => {
+    document.getElementById(id).width = BW;
+  });
+  renderBar(document.getElementById('bar-jet'),         jet,     false);
+  renderBar(document.getElementById('bar-jet-gray'),    jet,     true);
+  renderBar(document.getElementById('bar-viridis'),     viridis, false);
+  renderBar(document.getElementById('bar-viridis-gray'),viridis, true);
+
+  // ── slider logic ─────────────────────────────────────────────────────────
+  const container = document.getElementById('container');
+  const overlay   = document.getElementById('overlay');
+  const divider   = document.getElementById('divider');
+  const handle    = document.getElementById('handle');
+
+  let pct = 50; // start in the middle
+
+  function setSlider(x) {
+    const rect = container.getBoundingClientRect();
+    pct = Math.max(0, Math.min(100, (x - rect.left) / rect.width * 100));
+    overlay.style.width  = pct + '%';
+    divider.style.left   = pct + '%';
+    handle.style.left    = pct + '%';
+  }
+
+  // init position
+  overlay.style.width = '50%';
+  divider.style.left  = '50%';
+  handle.style.left   = '50%';
+
+  // The overlay canvas needs to be as wide as the container, not clipped
+  cvJet.style.width  = (100 / (pct/100 || 0.5)) + '%'; // will update on resize
+  function fixOverlayCanvas() {
+    const cw = container.getBoundingClientRect().width;
+    cvJet.style.width = cw + 'px';
+  }
+  fixOverlayCanvas();
+  window.addEventListener('resize', fixOverlayCanvas);
+
+  let dragging = false;
+  container.addEventListener('mousedown',  e => { dragging = true; setSlider(e.clientX); });
+  container.addEventListener('touchstart', e => { dragging = true; setSlider(e.touches[0].clientX); }, {passive:true});
+  window.addEventListener('mousemove',  e => { if (dragging) setSlider(e.clientX); });
+  window.addEventListener('touchmove',  e => { if (dragging) setSlider(e.touches[0].clientX); }, {passive:true});
+  window.addEventListener('mouseup',   () => { dragging = false; });
+  window.addEventListener('touchend',  () => { dragging = false; });
+
+})();
+</script>
+</body>
+</html>
