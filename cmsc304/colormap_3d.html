@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Surface</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d0d0f;
+    color: #e8e4dc;
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+    width: 100vw; height: 100vh;
+  }
+  #canvas3d { display: block; width: 100%; height: 100%; }
+
+  .ui {
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    background: rgba(13,13,15,0.7);
+    border: 1px solid #222;
+    border-radius: 999px;
+    padding: 5px 8px;
+    backdrop-filter: blur(6px);
+  }
+  .ui button {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid #333;
+    color: #888;
+    border-radius: 999px;
+    padding: 4px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .ui button.active {
+    background: #1e1e2a;
+    border-color: #555;
+    color: #e8e4dc;
+  }
+
+  .hint {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.1em;
+    color: #333;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<canvas id="canvas3d"></canvas>
+<div class="ui">
+  <button id="btn-jet" class="active">Rainbow (Jet)</button>
+  <button id="btn-viridis">Viridis</button>
+  <button id="btn-gray">Grayscale</button>
+</div>
+<div class="hint">drag to rotate · scroll to zoom</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+
+  // ── colormaps ────────────────────────────────────────────────────────────
+  function jet(t) {
+    return [
+      Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 3))),
+      Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 2))),
+      Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 1)))
+    ];
+  }
+  const VL = [[.267,.005,.329],[.283,.055,.386],[.278,.104,.431],[.263,.149,.466],[.241,.190,.494],[.215,.228,.513],[.190,.263,.525],[.166,.296,.532],[.143,.328,.536],[.122,.359,.537],[.103,.390,.535],[.087,.420,.530],[.075,.450,.522],[.068,.481,.511],[.072,.511,.496],[.089,.541,.478],[.120,.571,.457],[.164,.600,.433],[.217,.629,.406],[.275,.656,.376],[.337,.682,.344],[.402,.707,.310],[.470,.730,.273],[.541,.752,.235],[.613,.773,.196],[.685,.792,.157],[.758,.811,.118],[.827,.830,.083],[.893,.850,.055],[.949,.873,.052],[.987,.903,.104],[.993,.906,.144]];
+  function viridis(t) {
+    const n = VL.length-1, i = Math.min(Math.floor(t*n), n-1), f = t*n-i;
+    const a = VL[i], b = VL[Math.min(i+1,n)];
+    return [a[0]+f*(b[0]-a[0]), a[1]+f*(b[1]-a[1]), a[2]+f*(b[2]-a[2])];
+  }
+  function gray(t) { return [t, t, t]; }
+
+  // ── signal ───────────────────────────────────────────────────────────────
+  const N = 80;
+  function signal(nx, ny) {
+    const g1 = Math.exp(-((nx-.3)**2 + (ny-.4)**2) / .04);
+    const g2 = Math.exp(-((nx-.72)**2 + (ny-.6)**2) / .025);
+    const g3 = Math.exp(-((nx-.55)**2 + (ny-.2)**2) / .015);
+    const wave = .5 + .1 * Math.sin(nx*12) * Math.cos(ny*8);
+    return Math.min(1, Math.max(0, .15*wave + .55*g1 + .7*g2 + .35*g3));
+  }
+
+  // precompute heights
+  const heights = [];
+  for (let j = 0; j <= N; j++)
+    for (let i = 0; i <= N; i++)
+      heights.push(signal(i/N, j/N));
+
+  // ── Three.js setup ───────────────────────────────────────────────────────
+  const canvas = document.getElementById('canvas3d');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setClearColor(0x0d0d0f, 1);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+  camera.position.set(1.6, 1.4, 1.6);
+  camera.lookAt(0, 0.1, 0);
+
+  // lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(2, 3, 2);
+  scene.add(dir);
+
+  // ── build geometry ───────────────────────────────────────────────────────
+  function buildMesh(cmapFn) {
+    const geo = new THREE.BufferGeometry();
+    const positions = [], colors = [], indices = [];
+
+    for (let j = 0; j <= N; j++) {
+      for (let i = 0; i <= N; i++) {
+        const x = (i/N - 0.5) * 2;
+        const z = (j/N - 0.5) * 2;
+        const t = heights[j*(N+1)+i];
+        const y = t * 0.8;
+        positions.push(x, y, z);
+        const [r,g,b] = cmapFn(t);
+        colors.push(r, g, b);
+      }
+    }
+
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const a = j*(N+1)+i, b = a+1, c = (j+1)*(N+1)+i, d = c+1;
+        indices.push(a,b,d, a,d,c);
+      }
+    }
+
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color',    new THREE.Float32BufferAttribute(colors, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    return new THREE.Mesh(geo, mat);
+  }
+
+  let currentMesh = buildMesh(jet);
+  scene.add(currentMesh);
+
+  // thin base / floor grid
+  const gridHelper = new THREE.GridHelper(2, 10, 0x222222, 0x1a1a1a);
+  gridHelper.position.y = -0.01;
+  scene.add(gridHelper);
+
+  // ── colormap switching ───────────────────────────────────────────────────
+  let activeCmap = jet;
+  function switchCmap(fn, btnId) {
+    scene.remove(currentMesh);
+    currentMesh.geometry.dispose();
+    currentMesh.material.dispose();
+    currentMesh = buildMesh(fn);
+    scene.add(currentMesh);
+    activeCmap = fn;
+    document.querySelectorAll('.ui button').forEach(b => b.classList.remove('active'));
+    document.getElementById(btnId).classList.add('active');
+  }
+
+  document.getElementById('btn-jet').addEventListener('click',     () => switchCmap(jet,     'btn-jet'));
+  document.getElementById('btn-viridis').addEventListener('click', () => switchCmap(viridis, 'btn-viridis'));
+  document.getElementById('btn-gray').addEventListener('click',    () => switchCmap(gray,    'btn-gray'));
+
+  // ── orbit controls (manual) ──────────────────────────────────────────────
+  let isDragging = false, lastX = 0, lastY = 0;
+  let theta = Math.PI / 4, phi = Math.PI / 3.5, radius = 2.8;
+  const target = new THREE.Vector3(0, 0.15, 0);
+
+  function updateCamera() {
+    camera.position.set(
+      target.x + radius * Math.sin(phi) * Math.sin(theta),
+      target.y + radius * Math.cos(phi),
+      target.z + radius * Math.sin(phi) * Math.cos(theta)
+    );
+    camera.lookAt(target);
+  }
+  updateCamera();
+
+  canvas.addEventListener('mousedown',  e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+  canvas.addEventListener('touchstart', e => { isDragging = true; lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; }, {passive:true});
+  window.addEventListener('mouseup',  () => isDragging = false);
+  window.addEventListener('touchend', () => isDragging = false);
+
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    theta -= (e.clientX - lastX) * 0.008;
+    phi    = Math.max(0.1, Math.min(Math.PI/2, phi + (e.clientY - lastY) * 0.008));
+    lastX = e.clientX; lastY = e.clientY;
+    updateCamera();
+  });
+  window.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+    theta -= (e.touches[0].clientX - lastX) * 0.008;
+    phi    = Math.max(0.1, Math.min(Math.PI/2, phi + (e.touches[0].clientY - lastY) * 0.008));
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+    updateCamera();
+  }, {passive:true});
+
+  canvas.addEventListener('wheel', e => {
+    radius = Math.max(1.2, Math.min(6, radius + e.deltaY * 0.005));
+    updateCamera();
+    e.preventDefault();
+  }, {passive:false});
+
+  // ── resize ───────────────────────────────────────────────────────────────
+  function resize() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ── render loop ──────────────────────────────────────────────────────────
+  function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+  }
+  animate();
+
+})();
+</script>
+</body>
+</html>
