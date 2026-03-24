@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Colormap Comparison</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d0d0f;
+    color: #e8e4dc;
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    padding: 40px 32px;
+  }
+
+  h1 {
+    font-size: 13px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 36px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px 48px;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .panel-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .panel-title {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .panel-subtitle {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: #555;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  canvas.cmap-bar {
+    width: 100%;
+    height: 40px;
+    border-radius: 3px;
+    display: block;
+  }
+
+  canvas.heatmap {
+    width: 100%;
+    aspect-ratio: 2.5 / 1;
+    border-radius: 3px;
+    display: block;
+  }
+
+  .bar-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .bar-label {
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: #444;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .verdict {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #666;
+    line-height: 1.5;
+    font-style: italic;
+  }
+
+  .verdict strong {
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  .verdict.bad strong { color: #e05a5a; }
+  .verdict.good strong { color: #5ab87a; }
+
+  .divider {
+    grid-column: 1 / -1;
+    height: 1px;
+    background: #1e1e22;
+    margin: 4px 0;
+  }
+
+  .section-heading {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #444;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #1e1e22;
+  }
+
+  .callout {
+    grid-column: 1 / -1;
+    background: #12121a;
+    border: 1px solid #1e1e28;
+    border-left: 3px solid #5a6ee0;
+    border-radius: 4px;
+    padding: 14px 18px;
+    font-size: 13px;
+    color: #888;
+    line-height: 1.6;
+    margin-top: 4px;
+  }
+
+  .callout strong { color: #c4c0f0; }
+</style>
+</head>
+<body>
+
+<h1>Colormap Perception Analysis</h1>
+
+<div class="grid">
+
+  <!-- RAINBOW section -->
+  <div class="section-heading">Rainbow / Jet &mdash; the problematic standard</div>
+
+  <div class="panel">
+    <div class="panel-label">
+      <span class="panel-title">Rainbow (Jet)</span>
+      <span class="panel-subtitle">as rendered</span>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Color</div>
+      <canvas class="cmap-bar" id="jet-color" width="600" height="40"></canvas>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Grayscale (luminance only)</div>
+      <canvas class="cmap-bar" id="jet-gray" width="600" height="40"></canvas>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-label">
+      <span class="panel-title">Rainbow (Jet)</span>
+      <span class="panel-subtitle">sample heatmap</span>
+    </div>
+    <canvas class="heatmap" id="jet-heatmap" width="500" height="200"></canvas>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- VIRIDIS section -->
+  <div class="section-heading">Viridis &mdash; perceptually uniform</div>
+
+  <div class="panel">
+    <div class="panel-label">
+      <span class="panel-title">Viridis</span>
+      <span class="panel-subtitle">as rendered</span>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Color</div>
+      <canvas class="cmap-bar" id="viridis-color" width="600" height="40"></canvas>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Grayscale (luminance only)</div>
+      <canvas class="cmap-bar" id="viridis-gray" width="600" height="40"></canvas>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-label">
+      <span class="panel-title">Viridis</span>
+      <span class="panel-subtitle">same heatmap</span>
+    </div>
+    <canvas class="heatmap" id="viridis-heatmap" width="500" height="200"></canvas>
+  </div>
+
+</div>
+
+<script>
+// ── Colormap definitions ───────────────────────────────────────────────────
+
+function jetColor(t) {
+  // Classic jet: blue → cyan → green → yellow → red
+  const r = Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 3)));
+  const g = Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 2)));
+  const b = Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 1)));
+  return [r, g, b];
+}
+
+// Viridis lookup table (sampled at 32 points, interpolated)
+const VIRIDIS_LUT = [
+  [0.267, 0.005, 0.329],[0.283, 0.055, 0.386],[0.278, 0.104, 0.431],
+  [0.263, 0.149, 0.466],[0.241, 0.190, 0.494],[0.215, 0.228, 0.513],
+  [0.190, 0.263, 0.525],[0.166, 0.296, 0.532],[0.143, 0.328, 0.536],
+  [0.122, 0.359, 0.537],[0.103, 0.390, 0.535],[0.087, 0.420, 0.530],
+  [0.075, 0.450, 0.522],[0.068, 0.481, 0.511],[0.072, 0.511, 0.496],
+  [0.089, 0.541, 0.478],[0.120, 0.571, 0.457],[0.164, 0.600, 0.433],
+  [0.217, 0.629, 0.406],[0.275, 0.656, 0.376],[0.337, 0.682, 0.344],
+  [0.402, 0.707, 0.310],[0.470, 0.730, 0.273],[0.541, 0.752, 0.235],
+  [0.613, 0.773, 0.196],[0.685, 0.792, 0.157],[0.758, 0.811, 0.118],
+  [0.827, 0.830, 0.083],[0.893, 0.850, 0.055],[0.949, 0.873, 0.052],
+  [0.987, 0.903, 0.104],[0.993, 0.906, 0.144]
+];
+
+function viridisColor(t) {
+  const n = VIRIDIS_LUT.length - 1;
+  const i = Math.min(Math.floor(t * n), n - 1);
+  const f = t * n - i;
+  const c0 = VIRIDIS_LUT[i];
+  const c1 = VIRIDIS_LUT[Math.min(i + 1, n)];
+  return [
+    c0[0] + f * (c1[0] - c0[0]),
+    c0[1] + f * (c1[1] - c0[1]),
+    c0[2] + f * (c1[2] - c0[2]),
+  ];
+}
+
+// ── Luminance (perceptual) ─────────────────────────────────────────────────
+function linearize(c) {
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+function luminance(r, g, b) {
+  return 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b);
+}
+
+// ── Draw helpers ───────────────────────────────────────────────────────────
+function drawBar(canvasId, colorFn, gray = false) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  for (let x = 0; x < W; x++) {
+    const t = x / (W - 1);
+    let [r, g, b] = colorFn(t);
+    if (gray) {
+      const L = luminance(r, g, b);
+      // Convert back to sRGB gamma for display
+      const sL = L <= 0.0031308 ? 12.92 * L : 1.055 * Math.pow(L, 1/2.4) - 0.055;
+      r = g = b = sL;
+    }
+    ctx.fillStyle = `rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`;
+    ctx.fillRect(x, 0, 1, H);
+  }
+}
+
+function drawHeatmap(canvasId, colorFn) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const imageData = ctx.createImageData(W, H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      // Smooth 2D test signal: sum of two gaussians + gentle gradient
+      const nx = x / W, ny = y / H;
+      const g1 = Math.exp(-((nx-0.3)**2 + (ny-0.4)**2) / 0.04);
+      const g2 = Math.exp(-((nx-0.72)**2 + (ny-0.6)**2) / 0.025);
+      const g3 = Math.exp(-((nx-0.55)**2 + (ny-0.2)**2) / 0.015);
+      const wave = 0.5 + 0.1 * Math.sin(nx * 12) * Math.cos(ny * 8);
+      const t = Math.min(1, Math.max(0, 0.15 * wave + 0.55 * g1 + 0.7 * g2 + 0.35 * g3));
+      const [r, g, b] = colorFn(t);
+      const idx = (y * W + x) * 4;
+      imageData.data[idx]   = Math.round(r * 255);
+      imageData.data[idx+1] = Math.round(g * 255);
+      imageData.data[idx+2] = Math.round(b * 255);
+      imageData.data[idx+3] = 255;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// ── Render everything ──────────────────────────────────────────────────────
+drawBar('jet-color',     jetColor,     false);
+drawBar('jet-gray',      jetColor,     true);
+drawBar('viridis-color', viridisColor, false);
+drawBar('viridis-gray',  viridisColor, true);
+drawHeatmap('jet-heatmap',     jetColor);
+drawHeatmap('viridis-heatmap', viridisColor);
+</script>
+</body>
+</html>
