@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simultaneous Contrast & Bezold Effect</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #f5f4ef;
+    color: #1a1916;
+    padding: 2rem 1rem;
+    min-height: 100vh;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1916; color: #e8e4d8; }
+    .card { background: #242220; border-color: #3a3830; }
+    .note { color: #888070; }
+    hr.dv { border-color: #3a3830; }
+    .section-tag { color: #888070; }
+    button.btn { border-color: #4a4840; color: #a09880; }
+    button.btn:hover { background: #2e2c28; }
+    button.btn.on { background: #e8e4d8; color: #1a1916; border-color: transparent; }
+    .srow { color: #888070; }
+  }
+
+  .page-header {
+    max-width: 680px;
+    margin: 0 auto 2rem;
+  }
+  .page-title {
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+  .page-sub {
+    font-size: 14px;
+    color: #555248;
+    line-height: 1.6;
+  }
+  @media (prefers-color-scheme: dark) {
+    .page-sub { color: #888070; }
+  }
+
+  .card {
+    background: #fff;
+    border: 0.5px solid #dedad0;
+    border-radius: 12px;
+    padding: 1.5rem;
+    max-width: 680px;
+    margin: 0 auto 1.5rem;
+  }
+  .section-tag {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #888070;
+    margin-bottom: 3px;
+  }
+  h2 {
+    font-size: 17px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .desc {
+    font-size: 13px;
+    color: #555248;
+    line-height: 1.55;
+    margin-bottom: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    .desc { color: #888070; }
+  }
+
+  canvas.ex {
+    display: block;
+    width: 100%;
+    border-radius: 8px;
+  }
+
+  .ctrl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  button.btn {
+    padding: 4px 14px;
+    border-radius: 99px;
+    border: 0.5px solid #ccc8be;
+    background: transparent;
+    color: #555248;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.1s;
+    font-family: inherit;
+  }
+  button.btn:hover { background: #f0ede4; }
+  button.btn.on {
+    background: #1a1916;
+    color: #f5f4ef;
+    border-color: transparent;
+  }
+
+  .srow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666258;
+  }
+  .srow input[type=range] { flex: 1; }
+
+  .note {
+    font-size: 12px;
+    color: #888070;
+    margin-top: 9px;
+    line-height: 1.55;
+  }
+
+  hr.dv {
+    border: none;
+    border-top: 0.5px solid #dedad0;
+    margin: 1.5rem 0;
+  }
+
+  .prose {
+    font-size: 13px;
+    color: #555248;
+    line-height: 1.65;
+    max-width: 680px;
+    margin: 0 auto 1.5rem;
+    padding: 0;
+  }
+  @media (prefers-color-scheme: dark) {
+    .prose { color: #888070; }
+  }
+  .prose p + p { margin-top: 0.6em; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1 class="page-title">Color perception: two classic illusions</h1>
+  <p class="page-sub">Our visual system doesn't measure colors absolutely — it compares them to their surroundings. These two effects reveal how dramatically context shapes what we see.</p>
+</div>
+
+<div class="card">
+  <p class="section-tag">Effect 1</p>
+  <h2>Simultaneous contrast</h2>
+  <p class="desc">Both center squares are the exact same color. Surrounding context shifts how we perceive them. Try both modes — the effect works with brightness <em>and</em> hue.</p>
+  <canvas class="ex" id="sc" height="210"></canvas>
+  <div class="ctrl">
+    <button class="btn on" id="blt" onclick="setM('light')">Lightness</button>
+    <button class="btn" id="bhu" onclick="setM('hue')">Hue</button>
+    <button class="btn" id="brv" onclick="rev()">Reveal identical colors</button>
+  </div>
+  <div class="srow" id="slr">
+    <span>Contrast</span>
+    <input type="range" id="sl" min="0" max="100" value="85" oninput="onSl()">
+    <span id="slv">85%</span>
+  </div>
+</div>
+
+<div class="prose">
+  <p>This effect is why a shadow on white paper looks different from gray paint, even when their RGB values are identical. The visual cortex is essentially doing local contrast enhancement — always comparing a region to its immediate neighbors.</p>
+  <p>The hue version works the same way: a neutral gray on a red background appears to pull toward red's complement (green), because the brain subtracts the dominant surround color to "normalize" the scene.</p>
+</div>
+
+<div class="card">
+  <p class="section-tag">Effect 2</p>
+  <h2>Bezold effect</h2>
+  <p class="desc">Left half always shows white lines as reference. Pick a color for the right half. The amber squares are <em>identical</em> on both sides — only the thin grid lines differ.</p>
+  <canvas class="ex" id="bz" height="220"></canvas>
+  <div class="ctrl" id="bzc">
+    <span style="font-size:12px;color:#888070">Right half:</span>
+    <button class="btn" onclick="sBz('white',this)">White</button>
+    <button class="btn on" onclick="sBz('black',this)">Black</button>
+    <button class="btn" onclick="sBz('blue',this)">Blue</button>
+    <button class="btn" onclick="sBz('red',this)">Red</button>
+  </div>
+  <p class="note" id="bzn">Right half: black lines. Same amber squares now appear darker and richer — almost burnt sienna.</p>
+</div>
+
+<div class="prose">
+  <p>Named after Wilhelm von Bezold (1873), who noticed that changing a single color in a textile pattern could make the entire rug appear to change. Unlike simultaneous contrast (which acts at the boundary of two regions), the Bezold effect works through <em>optical mixing</em> — the thin lines are close enough that the eye blends them with the surrounding area.</p>
+  <p>This is why the same orange pigment looks golden in sunlit rug photography and dark brown in shadow — the interleaving grout lines or weave threads shift the overall perceived tone.</p>
+</div>
+
+<script>
+var NTS = {
+  white: 'Right half also has white lines — both halves look identical.',
+  black: 'Right half: black lines. Same amber squares appear darker and richer — almost burnt sienna.',
+  blue: 'Right half: blue lines. The amber shifts cooler and more muted.',
+  red: 'Right half: red lines. The warmth intensifies — amber feels deeper and more vibrant.'
+};
+var LC = { white: '#ECE8DE', black: '#1A1814', blue: '#2256A0', red: '#B82410' };
+var scM = 'light', shown = false, bzC = 'black';
+
+function setM(m) {
+  scM = m; shown = false;
+  document.getElementById('brv').textContent = 'Reveal identical colors';
+  document.getElementById('blt').classList.toggle('on', m === 'light');
+  document.getElementById('bhu').classList.toggle('on', m === 'hue');
+  document.getElementById('slr').style.display = m === 'hue' ? 'none' : '';
+  dSC();
+}
+function rev() {
+  shown = !shown;
+  document.getElementById('brv').textContent = shown ? 'Hide colors' : 'Reveal identical colors';
+  dSC();
+}
+function onSl() {
+  document.getElementById('slv').textContent = document.getElementById('sl').value + '%';
+  dSC();
+}
+function sBz(c, btn) {
+  bzC = c;
+  document.getElementById('bzc').querySelectorAll('.btn').forEach(function(b) { b.classList.remove('on'); });
+  btn.classList.add('on');
+  document.getElementById('bzn').textContent = NTS[c];
+  dBZ();
+}
+
+function rp(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+function dSC() {
+  var c = document.getElementById('sc'), ctx = c.getContext('2d');
+  var W = c.width, H = c.height;
+  var v = +document.getElementById('sl').value / 100;
+  ctx.clearRect(0, 0, W, H);
+  var g = 4, hw = (W - g) / 2;
+  var ps = Math.round(Math.min(hw * 0.30, H * 0.44));
+  var py = Math.round((H - ps) / 2);
+  var lpx = Math.round(hw / 2 - ps / 2), rpx = Math.round(hw + g + hw / 2 - ps / 2);
+
+  if (scM === 'light') {
+    var dk = shown ? 128 : Math.round(14 + (128 - 14) * (1 - v));
+    var lt = shown ? 128 : Math.round(128 + (253 - 128) * v);
+    ctx.fillStyle = 'rgb(' + dk + ',' + dk + ',' + dk + ')'; rp(ctx, 0, 0, hw, H, 8); ctx.fill();
+    ctx.fillStyle = 'rgb(' + lt + ',' + lt + ',' + lt + ')'; rp(ctx, hw + g, 0, hw, H, 8); ctx.fill();
+    ctx.fillStyle = 'rgb(128,128,128)';
+    rp(ctx, lpx, py, ps, ps, 4); ctx.fill();
+    rp(ctx, rpx, py, ps, ps, 4); ctx.fill();
+    ctx.font = '500 12px system-ui, sans-serif'; ctx.textAlign = 'center';
+    if (!shown) {
+      ctx.fillStyle = dk < 100 ? 'rgba(255,255,255,.65)' : 'rgba(0,0,0,.4)';
+      ctx.fillText('looks lighter', hw / 2, H - 15);
+      ctx.fillStyle = lt > 195 ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.65)';
+      ctx.fillText('looks darker', hw + g + hw / 2, H - 15);
+    } else {
+      ctx.fillStyle = dk < 100 ? 'rgba(255,255,255,.88)' : 'rgba(0,0,0,.65)';
+      ctx.fillText('#808080', lpx + ps / 2, py + ps / 2 + 4);
+      ctx.fillStyle = lt > 195 ? 'rgba(0,0,0,.65)' : 'rgba(255,255,255,.88)';
+      ctx.fillText('#808080', rpx + ps / 2, py + ps / 2 + 4);
+    }
+  } else {
+    var rb = shown ? [128, 128, 128] : [190, 36, 36];
+    var tb = shown ? [128, 128, 128] : [16, 142, 118];
+    ctx.fillStyle = 'rgb(' + rb[0] + ',' + rb[1] + ',' + rb[2] + ')'; rp(ctx, 0, 0, hw, H, 8); ctx.fill();
+    ctx.fillStyle = 'rgb(' + tb[0] + ',' + tb[1] + ',' + tb[2] + ')'; rp(ctx, hw + g, 0, hw, H, 8); ctx.fill();
+    ctx.fillStyle = 'rgb(128,128,128)';
+    rp(ctx, lpx, py, ps, ps, 4); ctx.fill();
+    rp(ctx, rpx, py, ps, ps, 4); ctx.fill();
+    ctx.font = '500 12px system-ui, sans-serif'; ctx.textAlign = 'center';
+    if (!shown) {
+      ctx.fillStyle = 'rgba(255,255,255,.82)';
+      ctx.fillText('same gray — looks greenish', hw / 2, H - 15);
+      ctx.fillText('same gray — looks reddish', hw + g + hw / 2, H - 15);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,.92)';
+      ctx.fillText('#808080', lpx + ps / 2, py + ps / 2 + 4);
+      ctx.fillText('#808080', rpx + ps / 2, py + ps / 2 + 4);
+    }
+  }
+}
+
+function dBZ() {
+  var c = document.getElementById('bz'), ctx = c.getContext('2d');
+  var W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  var bs = ['#CC7804', '#D8820E', '#C27200', '#E08C14'];
+  var tk = 28, tn = 7, st = tk + tn, nc = 10, cw = W / nc;
+
+  function half(lc, x0, ww) {
+    ctx.save(); ctx.beginPath(); ctx.rect(x0, 0, ww, H); ctx.clip();
+    var y = 0, row = 0;
+    while (y < H) {
+      for (var i = 0; i < nc; i++) {
+        ctx.fillStyle = bs[(row * 3 + i) % bs.length];
+        ctx.fillRect(i * cw, y, cw + 1, tk);
+      }
+      ctx.fillStyle = lc; ctx.fillRect(x0, y + tk, ww, tn);
+      y += st; row++;
+    }
+    for (var i = 1; i < nc; i++) {
+      var vx = Math.round(i * cw);
+      if (vx > x0 && vx < x0 + ww) { ctx.fillStyle = lc; ctx.fillRect(vx - 2, 0, 4, H); }
+    }
+    ctx.restore();
+  }
+
+  var hw = Math.floor(W / 2);
+  half(LC.white, 0, hw - 1);
+  half(LC[bzC], hw + 1, hw - 1);
+  ctx.fillStyle = 'rgba(180,175,165,.6)'; ctx.fillRect(hw - 1, 0, 2, H);
+
+  ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+  function pill(t, cx) {
+    var tw = ctx.measureText(t).width;
+    ctx.fillStyle = 'rgba(0,0,0,.42)';
+    rp(ctx, cx - tw / 2 - 8, H - 26, tw + 16, 20, 4); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fillText(t, cx, H - 12);
+  }
+  pill('white lines', hw / 2);
+  pill(bzC + ' lines', hw + 1 + hw / 2);
+
+  ctx.save(); ctx.globalCompositeOperation = 'destination-in';
+  rp(ctx, 0, 0, W, H, 8); ctx.fill(); ctx.restore();
+}
+
+function init() {
+  ['sc', 'bz'].forEach(function(id) {
+    var el = document.getElementById(id);
+    var w = el.parentElement.offsetWidth - 48;
+    if (w > 10) el.width = w;
+  });
+  dSC(); dBZ();
+}
+window.addEventListener('resize', function() { clearTimeout(window._rt); window._rt = setTimeout(init, 80); });
+init();
+</script>
+</body>
+</html>
